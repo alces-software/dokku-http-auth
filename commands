@@ -6,6 +6,7 @@ if [[ -n $DOKKU_API_VERSION ]]; then
   PLUGIN_BASE_PATH="$PLUGIN_ENABLED_PATH"
 fi
 source "$PLUGIN_BASE_PATH/common/functions"
+source "$PLUGIN_BASE_PATH/config/functions"
 
 reload_nginx () {
   case "$DOKKU_DISTRO" in
@@ -35,8 +36,17 @@ case "$1" in
     if [[ ! -d "$APP_ROOT/nginx.conf.d" ]]; then
       mkdir "$APP_ROOT/nginx.conf.d"
     fi
-    cp "$(dirname "$0")/templates/http-auth.conf" "$APP_ROOT/nginx.conf.d"
-    sed -i "s,{APP_ROOT},$APP_ROOT," "$APP_ROOT/nginx.conf.d/http-auth.conf"
+
+    PROXY_PORT_MAP=$(config_get "$APP" DOKKU_PROXY_PORT_MAP)
+    SIGIL_PARAMS=(-f "$(dirname "$0")/templates/http-auth.conf.sigil"
+      APP="$APP"
+      APP_ROOT="$APP_ROOT"
+      PROXY_PORT_MAP="$PROXY_PORT_MAP"
+    )
+    echo "sigil ${SIGIL_PARAMS[@]}"
+    sigil "${SIGIL_PARAMS[@]}"
+    sigil "${SIGIL_PARAMS[@]}" | cat -s > "$APP_ROOT/nginx.conf.d/http-auth.conf"
+
     HASHED_PASSWORD=$(mkpasswd -m sha-512 "$AUTH_PASSWORD")
     echo "$AUTH_USERNAME:$HASHED_PASSWORD" > "$APP_ROOT/htpasswd"
     reload_nginx
